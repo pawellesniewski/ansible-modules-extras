@@ -73,7 +73,7 @@ author: "Steve (@groks)"
 '''
 
 EXAMPLES = '''
-- name: Set the options explicitly a deivce which must already exist
+- name: Set the options explicitly a device which must already exist
   crypttab: name=luks-home state=present opts=discard,cipher=aes-cbc-essiv:sha256
 
 - name: Add the 'discard' option to any existing options for all devices
@@ -81,6 +81,9 @@ EXAMPLES = '''
   with_items: ansible_mounts
   when: '/dev/mapper/luks-' in {{ item.device }}
 '''
+
+from ansible.module_utils.basic import *
+from ansible.module_utils.pycompat24 import get_exception
 
 def main():
 
@@ -126,7 +129,8 @@ def main():
     try:
         crypttab = Crypttab(path)
         existing_line = crypttab.match(name)
-    except Exception, e:
+    except Exception:
+        e = get_exception()
         module.fail_json(msg="failed to open and parse crypttab file: %s" % e,
                          **module.params)
 
@@ -205,6 +209,8 @@ class Crypttab(object):
         for line in self._lines:
             lines.append(str(line))
         crypttab = '\n'.join(lines)
+        if len(crypttab) == 0:
+            crypttab += '\n'
         if crypttab[-1] != '\n':
             crypttab += '\n'
         return crypttab
@@ -252,18 +258,18 @@ class Line(object):
     def _split_line(self, line):
         fields = line.split()
         try:
-            field2 = field[2]
+            field2 = fields[2]
         except IndexError:
             field2 = None
         try:
-            field3 = field[3]
+            field3 = fields[3]
         except IndexError:
             field3 = None
 
         return (fields[0],
                 fields[1],
                 field2,
-                fields3)
+                field3)
 
     def remove(self):
         self.line, self.name, self.backing_device = '', None, None
@@ -356,6 +362,4 @@ class Options(dict):
                 ret.append('%s=%s' % (k, v))
         return ','.join(ret)
 
-# import module snippets
-from ansible.module_utils.basic import *
 main()

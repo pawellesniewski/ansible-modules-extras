@@ -49,19 +49,21 @@ options:
         required: true
         choices: ['present', 'absent', 'muted', 'unmuted']
     type:
-        description: ["The type of the monitor."]
+        description:
+            - "The type of the monitor."
+            - The 'event alert'is available starting at Ansible 2.1
         required: false
         default: null
-        choices: ['metric alert', 'service check']
+        choices: ['metric alert', 'service check', 'event alert']
     query:
-        description: ["he monitor query to notify on with syntax varying depending on what type of monitor you are creating."]
+        description: ["The monitor query to notify on with syntax varying depending on what type of monitor you are creating."]
         required: false
         default: null
     name:
         description: ["The name of the alert."]
         required: true
     message:
-        description: ["A message to include with notifications for this monitor. Email notifications can be sent to specific users by using the same '@username' notation as events."]
+        description: ["A message to include with notifications for this monitor. Email notifications can be sent to specific users by using the same '@username' notation as events. Monitor message template variables can be accessed by using double square brackets, i.e '[[' and ']]'."]
         required: false
         default: null
     silenced:
@@ -93,7 +95,7 @@ options:
         required: false
         default: False
     thresholds:
-        description: ["A dictionary of thresholds by status. Because service checks can have multiple thresholds, we don't define them directly in the query."]
+        description: ["A dictionary of thresholds by status. This option is only available for service checks and metric alerts. Because each of them can have multiple thresholds, we don't define them directly in the query."]
         required: false
         default: {'ok': 1, 'critical': 1, 'warning': 1}
 '''
@@ -105,7 +107,7 @@ datadog_monitor:
   name: "Test monitor"
   state: "present"
   query: "datadog.agent.up".over("host:host1").last(2).count_by_status()"
-  message: "Some message."
+  message: "Host [[host.name]] with IP [[host.ip]] is failing to report to datadog."
   api_key: "9775a026f1ca7d1c6c5af9d94d9595a4"
   app_key: "87ce4a24b5553d2e482ea8a8500e71b8ad4554ff"
 
@@ -139,18 +141,18 @@ def main():
             api_key=dict(required=True),
             app_key=dict(required=True),
             state=dict(required=True, choises=['present', 'absent', 'mute', 'unmute']),
-            type=dict(required=False, choises=['metric alert', 'service check']),
+            type=dict(required=False, choises=['metric alert', 'service check', 'event alert']),
             name=dict(required=True),
             query=dict(required=False),
             message=dict(required=False, default=None),
             silenced=dict(required=False, default=None, type='dict'),
-            notify_no_data=dict(required=False, default=False, choices=BOOLEANS),
+            notify_no_data=dict(required=False, default=False, type='bool'),
             no_data_timeframe=dict(required=False, default=None),
             timeout_h=dict(required=False, default=None),
             renotify_interval=dict(required=False, default=None),
             escalation_message=dict(required=False, default=None),
-            notify_audit=dict(required=False, default=False, choices=BOOLEANS),
-            thresholds=dict(required=False, type='dict', default={'ok': 1, 'critical': 1, 'warning': 1}),
+            notify_audit=dict(required=False, default=False, type='bool'),
+            thresholds=dict(required=False, type='dict', default=None),
         )
     )
 
@@ -174,6 +176,9 @@ def main():
     elif module.params['state'] == 'unmute':
         unmute_monitor(module)
 
+def _fix_template_vars(message):
+    return message.replace('[[', '{{').replace(']]', '}}')
+
 
 def _get_monitor(module):
     for monitor in api.Monitor.get_all():
@@ -185,7 +190,7 @@ def _get_monitor(module):
 def _post_monitor(module, options):
     try:
         msg = api.Monitor.create(type=module.params['type'], query=module.params['query'],
-                                 name=module.params['name'], message=module.params['message'],
+                                 name=module.params['name'], message=_fix_template_vars(module.params['message']),
                                  options=options)
         if 'errors' in msg:
             module.fail_json(msg=str(msg['errors']))
@@ -202,11 +207,11 @@ def _equal_dicts(a, b, ignore_keys):
 def _update_monitor(module, monitor, options):
     try:
         msg = api.Monitor.update(id=monitor['id'], query=module.params['query'],
-                                 name=module.params['name'], message=module.params['message'],
+                                 name=module.params['name'], message=_fix_template_vars(module.params['message']),
                                  options=options)
         if 'errors' in msg:
             module.fail_json(msg=str(msg['errors']))
-        elif _equal_dicts(msg, monitor, ['creator', 'overall_state']):
+        elif _equal_dicts(msg, monitor, ['creator', 'overall_state', 'modified']):
             module.exit_json(changed=False, msg=msg)
         else:
             module.exit_json(changed=True, msg=msg)
@@ -226,6 +231,8 @@ def install_monitor(module):
     }
 
     if module.params['type'] == "service check":
+        options["thresholds"] = module.params['thresholds'] or {'ok': 1, 'critical': 1, 'warning': 1}
+    if module.params['type'] == "metric alert" and module.params['thresholds'] is not None:
         options["thresholds"] = module.params['thresholds']
 
     monitor = _get_monitor(module)

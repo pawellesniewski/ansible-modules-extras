@@ -52,6 +52,62 @@ extends_documentation_fragment:
 author: "Christopher Troup (@minichate)"
 '''
 
+EXAMPLES = '''
+# create a public zone
+- route53_zone: zone=example.com state=present comment="this is an example"
+
+# delete a public zone
+- route53_zone: zone=example.com state=absent
+
+- name: private zone for devel
+  route53_zone: zone=devel.example.com state=present vpc_id={{myvpc_id}} comment='developer domain'
+
+# more complex example
+- name: register output after creating zone in parameterized region
+  route53_zone:
+    vpc_id: "{{ vpc.vpc_id }}"
+    vpc_region: "{{ ec2_region }}"
+    zone: "{{ vpc_dns_zone }}"
+    state: present
+    register: zone_out
+
+- debug: var=zone_out
+
+'''
+
+RETURN='''
+comment:
+    description: optional hosted zone comment
+    returned: when hosted zone exists
+    type: string
+    sample: "Private zone"
+name:
+    description: hosted zone name
+    returned: when hosted zone exists
+    type: string
+    sample: "private.local."
+private_zone:
+    description: whether hosted zone is private or public
+    returned: when hosted zone exists
+    type: bool
+    sample: true
+vpc_id:
+    description: id of vpc attached to private hosted zone
+    returned: for private hosted zone
+    type: string
+    sample: "vpc-1d36c84f"
+vpc_region:
+    description: region of vpc attached to private hosted zone
+    returned: for private hosted zone
+    type: string
+    sample: "eu-west-1"
+zone_id:
+    description: hosted zone id
+    returned: when hosted zone exists
+    type: string
+    sample: "Z6JQG9820BEFMW"
+'''
+
 import time
 
 try:

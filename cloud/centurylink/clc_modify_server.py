@@ -80,6 +80,7 @@ requirements:
     - python = 2.7
     - requests >= 2.5.0
     - clc-sdk
+author: "CLC Runner (@clc-runner)"
 notes:
     - To use this module, it is required to set the below environment variables which enables access to the
       Centurylink Cloud
@@ -154,11 +155,6 @@ EXAMPLES = '''
 '''
 
 RETURN = '''
-changed:
-    description: A flag indicating if any change was made or not
-    returned: success
-    type: boolean
-    sample: True
 server_ids:
     description: The list of server ids that are changed
     returned: success

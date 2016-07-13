@@ -318,12 +318,6 @@ network_offering:
   sample: DefaultIsolatedNetworkOfferingWithSourceNatService
 '''
 
-try:
-    from cs import CloudStack, CloudStackException, read_config
-    has_lib_cs = True
-except ImportError:
-    has_lib_cs = False
-
 # import cloudstack common
 from ansible.module_utils.cloudstack import *
 
@@ -428,7 +422,7 @@ class AnsibleCloudStackNetwork(AnsibleCloudStack):
         args        = self._get_args()
         args['id']  = network['id']
 
-        if self._has_changed(args, network):
+        if self.has_changed(args, network):
             self.result['changed'] = True
             if not self.module.check_mode:
                 network = self.cs.updateNetwork(**args)
@@ -438,7 +432,7 @@ class AnsibleCloudStackNetwork(AnsibleCloudStack):
 
                 poll_async = self.module.params.get('poll_async')
                 if network and poll_async:
-                    network = self._poll_job(network, 'network')
+                    network = self.poll_job(network, 'network')
         return network
 
 
@@ -496,7 +490,7 @@ class AnsibleCloudStackNetwork(AnsibleCloudStack):
 
                 poll_async = self.module.params.get('poll_async')
                 if network and poll_async:
-                    network = self._poll_job(network, 'network')
+                    network = self.poll_job(network, 'network')
         return network
 
 
@@ -516,7 +510,7 @@ class AnsibleCloudStackNetwork(AnsibleCloudStack):
 
                 poll_async = self.module.params.get('poll_async')
                 if res and poll_async:
-                    res = self._poll_job(res, 'network')
+                    res = self.poll_job(res, 'network')
             return network
 
 
@@ -539,14 +533,14 @@ def main():
         vlan = dict(default=None),
         vpc = dict(default=None),
         isolated_pvlan = dict(default=None),
-        clean_up = dict(type='bool', choices=BOOLEANS, default=False),
+        clean_up = dict(type='bool', default=False),
         network_domain = dict(default=None),
         state = dict(choices=['present', 'absent', 'restarted' ], default='present'),
         acl_type = dict(choices=['account', 'domain'], default='account'),
         project = dict(default=None),
         domain = dict(default=None),
         account = dict(default=None),
-        poll_async = dict(type='bool', choices=BOOLEANS, default=True),
+        poll_async = dict(type='bool', default=True),
     ))
     required_together = cs_required_together()
     required_together.extend([
@@ -559,9 +553,6 @@ def main():
         required_together=required_together,
         supports_check_mode=True
     )
-
-    if not has_lib_cs:
-        module.fail_json(msg="python library cs required: pip install cs")
 
     try:
         acs_network = AnsibleCloudStackNetwork(module)
@@ -578,7 +569,7 @@ def main():
 
         result = acs_network.get_result(network)
 
-    except CloudStackException, e:
+    except CloudStackException as e:
         module.fail_json(msg='CloudStackException: %s' % str(e))
 
     module.exit_json(**result)
